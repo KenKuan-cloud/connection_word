@@ -10,6 +10,7 @@
     --green:#a0c35a;
     --blue:#b0c4ef;
     --purple:#ba81c5;
+    --page:#f4f4ef;
     --bg:#ffffff;
     --fg:#121212;
     --tile:#efefe6;
@@ -21,16 +22,30 @@
     --accent:#121212;
     --shadow:0 2px 10px rgba(0,0,0,.12);
   }
+  :root[data-theme="dark"]{
+    --page:#0f0f10;
+    --bg:#1c1c1e;
+    --fg:#f2f2f2;
+    --tile:#3a3a3c;
+    --tile-fg:#f2f2f2;
+    --sel:#e6e6dc;
+    --sel-fg:#121212;
+    --border:#48484a;
+    --muted:#a0a0a0;
+    --accent:#f2f2f2;
+    --shadow:0 2px 14px rgba(0,0,0,.55);
+  }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
   body{
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif;
-    background:#f4f4ef;
+    background:var(--page);
     color:var(--fg);
     min-height:100vh;
     display:flex;
     justify-content:center;
     padding:12px;
+    transition:background .25s ease, color .25s ease;
   }
   /* Mobile-default container width; PC toggle widens it */
   .app{
@@ -238,6 +253,10 @@
       <div class="seg" id="widthSeg">
         <button data-w="mobile" class="active">📱</button>
         <button data-w="pc">🖥</button>
+      </div>
+      <div class="seg" id="themeSeg">
+        <button data-theme="light" class="active">☀️</button>
+        <button data-theme="dark">🌙</button>
       </div>
     </div>
   </header>
@@ -509,15 +528,46 @@ const DIFF_ORDER = ["yellow","green","blue","purple"];
 const FULL_PENALTY = 50, ONE_AWAY_PENALTY = 25, HINT_COST = 100, START_SCORE = 1000;
 
 let lang = "en";
-let library = deepClone(BUILTIN[lang]);   // active puzzle library (built-in for lang + customs)
+let theme = "light";
+let library = [];                          // active puzzle library (built-in for lang + saved customs)
 let puzzleIndex = 0;
 let current = null;                        // active puzzle
 let tiles = [];                            // remaining word strings (shuffled)
 let selected = [];                         // selected word strings
-let solved = [];                           // array of solved category objects
+let solved = [];                           // array of solved category objects (references into current.categories)
 let score = START_SCORE;
 let mistakes = 0;
 let revealedHints = [];                    // difficulties already hinted
+
+/* ---------- Persistence (localStorage; degrades gracefully on file://) ---------- */
+const CUSTOM_KEY = lg => `conn_custom_${lg}`;
+const memStore = {};                       // in-memory fallback when localStorage is unavailable
+function storeGet(key){
+  try{ const v = localStorage.getItem(key); return v==null ? memStore[key] : v; }
+  catch(e){ return memStore[key]; }
+}
+function storeSet(key,val){
+  memStore[key]=val;
+  try{ localStorage.setItem(key,val); }catch(e){/* file:// opaque origin — keep in memory */}
+}
+function loadCustoms(lg){
+  const raw = storeGet(CUSTOM_KEY(lg));
+  if(!raw) return [];
+  try{ const arr = JSON.parse(raw); return Array.isArray(arr) ? arr.filter(validatePuzzle) : []; }
+  catch(e){ return []; }
+}
+function saveCustoms(lg, arr){ storeSet(CUSTOM_KEY(lg), JSON.stringify(arr)); }
+function addCustoms(lg, puzzles){
+  const existing = loadCustoms(lg);
+  const merged = existing.concat(puzzles);
+  saveCustoms(lg, merged);
+  return merged.length;                    // new total custom count for this language
+}
+// Rebuild the active library = built-ins for `lang` + saved custom puzzles.
+function rebuildLibrary(){
+  const customs = loadCustoms(lang).map(p=>{ p.custom = true; return p; });
+  library = deepClone(BUILTIN[lang]).concat(deepClone(customs));
+}
 
 /* ---------- Utilities ---------- */
 function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
@@ -699,7 +749,7 @@ function submitGuess(){
   renderStatus();
 }
 
-function isSolved(cat){ return solved.some(s=>s.name===cat.name && s.difficulty===cat.difficulty); }
+function isSolved(cat){ return solved.includes(cat); }
 
 function shakeSelected(){
   document.querySelectorAll(".tile.selected").forEach(el=>{
@@ -743,12 +793,11 @@ function toast(msg){
   toastTimer=setTimeout(()=>el.classList.remove("show"),1800);
 }
 
-/* ---------- Language & width toggles ---------- */
+/* ---------- Language, width & theme toggles ---------- */
 function setLang(next){
   if(next===lang) return;
   lang=next;
-  // preserve any custom puzzles for this lang? Simplicity: rebuild library from built-ins for the new language.
-  library = deepClone(BUILTIN[lang]);
+  rebuildLibrary();               // built-ins for new lang + that lang's saved custom puzzles
   document.querySelectorAll("#langSeg button").forEach(b=>b.classList.toggle("active", b.dataset.lang===lang));
   applyI18n();
   buildCreatorForm();
@@ -757,6 +806,13 @@ function setLang(next){
 function setWidth(mode){
   $("app").classList.toggle("pc", mode==="pc");
   document.querySelectorAll("#widthSeg button").forEach(b=>b.classList.toggle("active", b.dataset.w===mode));
+}
+function setTheme(mode){
+  theme = mode==="dark" ? "dark" : "light";
+  if(theme==="dark") document.documentElement.setAttribute("data-theme","dark");
+  else document.documentElement.removeAttribute("data-theme");
+  document.querySelectorAll("#themeSeg button").forEach(b=>b.classList.toggle("active", b.dataset.theme===theme));
+  storeSet("conn_theme", theme);
 }
 
 /* ---------- Load / Create modal ---------- */
@@ -769,13 +825,25 @@ function switchTab(name){
   $("pane-create").classList.toggle("active", name==="create");
 }
 
-function playCustomPuzzle(p){
-  p.custom = true;
-  library.push(p);
-  loadPuzzle(library.length-1);
+// Persist one or more custom puzzles into the current language's base library,
+// rebuild, then jump to the first newly-added puzzle.
+function addAndPlay(puzzles){
+  let n = loadCustoms(lang).length;
+  const prepared = puzzles.map(p=>{
+    const q = deepClone(p);
+    q.custom = true;
+    if(!q.title || !String(q.title).trim()) q.title = `${t().customName} ${++n}`;
+    else n++;
+    return q;
+  });
+  addCustoms(lang, prepared);
+  rebuildLibrary();
+  loadPuzzle(library.length - prepared.length);   // first of the newly added
   closeLoad();
   toast(t().loaded);
 }
+
+function playCustomPuzzle(p){ addAndPlay([p]); }
 
 function handleFile(ev){
   const file = ev.target.files && ev.target.files[0];
@@ -787,13 +855,10 @@ function handleFile(ev){
     catch(e){ $("importErr").textContent=t().errParse; return; }
     const list = Array.isArray(data) ? data : [data];
     if(list.length===0 || !list.every(validatePuzzle)){ $("importErr").textContent=t().errShape; return; }
-    // import all valid puzzles; play the first
-    list.forEach((p,i)=>{ p.custom=true; if(!p.title) p.title=`${t().customName} ${library.filter(x=>x.custom).length+1}`; library.push(deepClone(p)); });
-    loadPuzzle(library.length-list.length);
-    closeLoad();
-    toast(t().loaded);
+    addAndPlay(list);          // imported puzzles become part of the base game (persisted for this language)
     ev.target.value="";
   };
+  reader.onerror=()=>{ $("importErr").textContent=t().errParse; };
   reader.readAsText(file);
 }
 
@@ -830,9 +895,10 @@ function saveCreator(){
   if(!allFilled){ $("createErr").textContent=t().errFormFill; return; }
   const allWords = cats.flatMap(cat=>cat.words);
   if(new Set(allWords).size!==allWords.length){ $("createErr").textContent=t().errDupWords; return; }
-  const puzzle={ id:Date.now(), custom:true, title:`${t().customName} ${library.filter(x=>x.custom).length+1}`, categories:cats };
+  const puzzle={ id:Date.now(), custom:true, categories:cats };
   if(!validatePuzzle(puzzle)){ $("createErr").textContent=t().errShape; return; }
   $("createErr").textContent="";
+  resetCreator();
   playCustomPuzzle(puzzle);
 }
 
@@ -843,6 +909,8 @@ function resetCreator(){
 
 /* ---------- Wire up ---------- */
 function init(){
+  setTheme(storeGet("conn_theme")==="dark" ? "dark" : "light");
+  rebuildLibrary();
   applyI18n();
   buildCreatorForm();
   loadPuzzle(0);
@@ -857,6 +925,7 @@ function init(){
 
   document.querySelectorAll("#langSeg button").forEach(b=>b.onclick=()=>setLang(b.dataset.lang));
   document.querySelectorAll("#widthSeg button").forEach(b=>b.onclick=()=>setWidth(b.dataset.w));
+  document.querySelectorAll("#themeSeg button").forEach(b=>b.onclick=()=>setTheme(b.dataset.theme));
 
   $("loadClose").onclick=closeLoad;
   $("loadOverlay").addEventListener("click",e=>{ if(e.target===$("loadOverlay")) closeLoad(); });
