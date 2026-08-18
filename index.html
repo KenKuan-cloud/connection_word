@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Connections</title>
+<style>
+  :root{
+    --yellow:#f9df6d;
+    --green:#a0c35a;
+    --blue:#b0c4ef;
+    --purple:#ba81c5;
+    --bg:#ffffff;
+    --fg:#121212;
+    --tile:#efefe6;
+    --tile-fg:#121212;
+    --sel:#5a594e;
+    --sel-fg:#ffffff;
+    --border:#d9d9d3;
+    --muted:#666;
+    --accent:#121212;
+    --shadow:0 2px 10px rgba(0,0,0,.12);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:#f4f4ef;
+    color:var(--fg);
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    padding:12px;
+  }
+  /* Mobile-default container width; PC toggle widens it */
+  .app{
+    width:100%;
+    max-width:480px;
+    background:var(--bg);
+    border-radius:16px;
+    box-shadow:var(--shadow);
+    padding:16px 14px 22px;
+    transition:max-width .25s ease;
+  }
+  .app.pc{ max-width:720px; }
+
+  header.top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    flex-wrap:wrap;
+    margin-bottom:6px;
+  }
+  h1{
+    font-family:Georgia,"Times New Roman",serif;
+    font-size:clamp(1.5rem,6vw,2rem);
+    margin:0;
+    letter-spacing:.5px;
+  }
+  .toggles{display:flex;gap:6px;flex-wrap:wrap;}
+  .seg{
+    display:inline-flex;
+    border:1px solid var(--border);
+    border-radius:999px;
+    overflow:hidden;
+    font-size:.8rem;
+  }
+  .seg button{
+    border:0;background:transparent;color:var(--fg);
+    padding:5px 11px;cursor:pointer;font-weight:600;
+    transition:background .15s;
+  }
+  .seg button.active{ background:var(--accent); color:#fff; }
+
+  .subtitle{ color:var(--muted); font-size:.85rem; margin:2px 0 12px; }
+
+  .statusbar{
+    display:flex;justify-content:space-between;gap:8px;
+    background:var(--tile);
+    border-radius:10px;
+    padding:8px 10px;
+    margin-bottom:12px;
+    font-size:.8rem;
+    flex-wrap:wrap;
+  }
+  .statusbar .stat{ text-align:center; flex:1; min-width:80px; }
+  .statusbar .stat .label{ color:var(--muted); display:block; font-size:.7rem; text-transform:uppercase; letter-spacing:.5px;}
+  .statusbar .stat .value{ font-weight:700; font-size:1.05rem; }
+
+  .banners{ display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
+  .banner{
+    border-radius:8px;
+    padding:10px 8px;
+    text-align:center;
+    color:#111;
+    animation:pop .35s ease;
+  }
+  .banner.yellow{ background:var(--yellow); }
+  .banner.green{ background:var(--green); }
+  .banner.blue{ background:var(--blue); }
+  .banner.purple{ background:var(--purple); }
+  .banner .bname{ font-weight:800; text-transform:uppercase; font-size:.85rem; letter-spacing:.5px;}
+  .banner .bwords{ font-size:.8rem; margin-top:2px; }
+
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:8px;
+    margin-bottom:14px;
+  }
+  .tile{
+    background:var(--tile);
+    color:var(--tile-fg);
+    border:0;
+    border-radius:8px;
+    aspect-ratio:1/1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:2px;
+    cursor:pointer;
+    font-weight:700;
+    font-size:clamp(.6rem,3.1vw,1rem);
+    line-height:1.05;
+    word-break:break-word;
+    user-select:none;
+    transition:transform .08s, background .12s, color .12s;
+  }
+  .app.pc .tile{ font-size:clamp(.8rem,1.8vw,1.05rem); }
+  .tile:active{ transform:scale(.95); }
+  .tile.selected{ background:var(--sel); color:var(--sel-fg); transform:scale(.97); }
+  .tile.shake{ animation:shake .45s; }
+
+  .controls{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+  button.btn{
+    border:1px solid var(--fg);
+    background:var(--bg);
+    color:var(--fg);
+    border-radius:999px;
+    padding:9px 15px;
+    font-size:.85rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:opacity .15s, background .15s;
+  }
+  button.btn:hover{ opacity:.85; }
+  button.btn.primary{ background:var(--fg); color:var(--bg); }
+  button.btn:disabled{ opacity:.35; cursor:not-allowed; }
+
+  .picker{
+    display:flex; gap:8px; align-items:center; justify-content:center;
+    margin-top:14px; flex-wrap:wrap;
+  }
+  .picker select{
+    padding:8px 10px; border-radius:8px; border:1px solid var(--border);
+    font-size:.85rem; background:var(--bg); color:var(--fg); max-width:100%;
+  }
+
+  /* Toast */
+  .toast{
+    position:fixed;
+    left:50%; bottom:40px; transform:translateX(-50%) translateY(20px);
+    background:#121212; color:#fff;
+    padding:10px 18px; border-radius:999px;
+    font-weight:700; font-size:.9rem;
+    opacity:0; pointer-events:none;
+    transition:opacity .25s, transform .25s;
+    z-index:60; max-width:90vw; text-align:center;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* Modal */
+  .overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.5);
+    display:none; align-items:center; justify-content:center;
+    padding:14px; z-index:50;
+  }
+  .overlay.show{ display:flex; }
+  .modal{
+    background:var(--bg); color:var(--fg);
+    border-radius:16px; width:100%; max-width:520px;
+    max-height:90vh; overflow:auto;
+    padding:18px; box-shadow:var(--shadow);
+  }
+  .modal h2{ margin:0 0 4px; font-family:Georgia,serif; }
+  .modal .close{ float:right; border:0; background:transparent; font-size:1.4rem; cursor:pointer; color:var(--fg); line-height:1;}
+  .tabs{ display:flex; gap:6px; margin:12px 0; flex-wrap:wrap; }
+  .tabs button{
+    flex:1; min-width:120px; border:1px solid var(--border); background:var(--bg);
+    color:var(--fg); padding:8px; border-radius:8px; cursor:pointer; font-weight:700; font-size:.82rem;
+  }
+  .tabs button.active{ background:var(--accent); color:#fff; }
+  .tabpane{ display:none; }
+  .tabpane.active{ display:block; }
+
+  .creator-row{ border:1px solid var(--border); border-radius:10px; padding:8px; margin-bottom:8px; }
+  .creator-row .rowhead{ display:flex; gap:6px; margin-bottom:6px; }
+  .creator-row .rowhead input{ flex:1; }
+  .creator-row .words{ display:grid; grid-template-columns:repeat(2,1fr); gap:6px; }
+  .modal input, .modal select{
+    padding:8px; border:1px solid var(--border); border-radius:6px;
+    font-size:.85rem; width:100%; background:var(--bg); color:var(--fg);
+  }
+  .modal label.field{ display:block; font-size:.8rem; color:var(--muted); margin:6px 0 8px; }
+  .modal .filehint{ font-size:.78rem; color:var(--muted); margin-top:6px; }
+  .modal .err{ color:#c0392b; font-size:.82rem; margin-top:8px; min-height:1em; }
+  .modal .actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:12px; flex-wrap:wrap; }
+
+  .rating{ font-size:1.4rem; font-weight:800; margin:8px 0; }
+  .result-grid{ display:flex; gap:18px; justify-content:center; margin:10px 0; }
+  .result-grid .cell{ text-align:center; }
+  .result-grid .cell .num{ font-size:1.8rem; font-weight:800; }
+  .result-grid .cell .cap{ font-size:.75rem; color:var(--muted); text-transform:uppercase; }
+
+  @keyframes shake{
+    10%,90%{transform:translateX(-2px);}
+    20%,80%{transform:translateX(3px);}
+    30%,50%,70%{transform:translateX(-5px);}
+    40%,60%{transform:translateX(5px);}
+  }
+  @keyframes pop{
+    0%{transform:scale(.85);opacity:0;}
+    100%{transform:scale(1);opacity:1;}
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <h1 id="title">Connections</h1>
+    <div class="toggles">
+      <div class="seg" id="langSeg">
+        <button data-lang="en" class="active">EN</button>
+        <button data-lang="zh">中文</button>
+      </div>
+      <div class="seg" id="widthSeg">
+        <button data-w="mobile" class="active">📱</button>
+        <button data-w="pc">🖥</button>
+      </div>
+    </div>
+  </header>
+  <div class="subtitle" id="subtitle">Create four groups of four!</div>
+
+  <div class="statusbar">
+    <div class="stat"><span class="label" id="lblPuzzle">Puzzle</span><span class="value" id="valPuzzle">#1 of 10</span></div>
+    <div class="stat"><span class="label" id="lblScore">Score</span><span class="value" id="valScore">1000</span></div>
+    <div class="stat"><span class="label" id="lblMistakes">Mistakes</span><span class="value" id="valMistakes">0</span></div>
+  </div>
+
+  <div class="banners" id="banners"></div>
+  <div class="grid" id="grid"></div>
+
+  <div class="controls">
+    <button class="btn" id="btnDeselect">Deselect All</button>
+    <button class="btn" id="btnShuffle">Shuffle</button>
+    <button class="btn" id="btnHint">Hint (−100)</button>
+    <button class="btn primary" id="btnSubmit" disabled>Submit</button>
+  </div>
+
+  <div class="picker">
+    <select id="puzzleSelect"></select>
+    <button class="btn" id="btnNext">Next Puzzle</button>
+    <button class="btn" id="btnLoad">Load / Create Puzzle</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Load / Create modal -->
+<div class="overlay" id="loadOverlay">
+  <div class="modal">
+    <button class="close" id="loadClose">&times;</button>
+    <h2 id="loadTitle">Load / Create Puzzle</h2>
+    <div class="tabs">
+      <button data-tab="import" class="active" id="tabImportBtn">Import JSON</button>
+      <button data-tab="create" id="tabCreateBtn">Create Puzzle</button>
+    </div>
+
+    <div class="tabpane active" id="pane-import">
+      <label class="field" id="importLabel">Upload a .json file (array of puzzles or a single puzzle object).</label>
+      <input type="file" id="fileInput" accept=".json,application/json" />
+      <div class="filehint" id="importHint">Format: each puzzle has 4 categories, each with a name, difficulty (yellow/green/blue/purple) and 4 words.</div>
+      <div class="err" id="importErr"></div>
+    </div>
+
+    <div class="tabpane" id="pane-create">
+      <div id="creatorRows"></div>
+      <div class="err" id="createErr"></div>
+      <div class="actions">
+        <button class="btn" id="createReset">Reset</button>
+        <button class="btn primary" id="createSave">Save & Play</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Completion modal -->
+<div class="overlay" id="doneOverlay">
+  <div class="modal">
+    <h2 id="doneTitle">Puzzle Solved!</h2>
+    <div class="rating" id="doneRating">Great!</div>
+    <div class="result-grid">
+      <div class="cell"><div class="num" id="doneScore">1000</div><div class="cap" id="doneScoreCap">Final Score</div></div>
+      <div class="cell"><div class="num" id="doneMistakes">0</div><div class="cap" id="doneMistakesCap">Mistakes</div></div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="doneNext">Next Built-in Puzzle</button>
+      <button class="btn" id="doneLoad">Load Custom Puzzle</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   Connections — offline, self-contained.
+   ============================================================ */
+
+/* ---------- i18n strings ---------- */
+const I18N = {
+  en: {
+    title: "Connections",
+    subtitle: "Create four groups of four!",
+    puzzle: "Puzzle", score: "Score", mistakes: "Mistakes",
+    puzzleOf: (i,n)=>`#${i} of ${n}`,
+    deselect: "Deselect All", shuffle: "Shuffle", hint: "Hint (−100)",
+    submit: "Submit", next: "Next Puzzle", load: "Load / Create Puzzle",
+    oneAway: "One away…", notEnough: "Select exactly 4 words.",
+    alreadyGuessed: "Already guessed that group.",
+    hintReveal: (name)=>`Hint: one group is “${name}”`,
+    noHint: "No groups left to hint.",
+    solvedTitle: "Puzzle Solved!", finalScore: "Final Score",
+    doneNext: "Next Built-in Puzzle", doneLoad: "Load Custom Puzzle",
+    loadTitle: "Load / Create Puzzle", tabImport: "Import JSON", tabCreate: "Create Puzzle",
+    importLabel: "Upload a .json file (array of puzzles or a single puzzle object).",
+    importHint: "Format: each puzzle has 4 categories, each with a name, difficulty (yellow/green/blue/purple) and 4 words.",
+    createReset: "Reset", createSave: "Save & Play",
+    catName: "Category name", word: "Word",
+    errParse: "Could not read the file as JSON.",
+    errShape: "Invalid puzzle format. Need 4 categories × 4 words each.",
+    errFormFill: "Please fill in all category names and all 16 words.",
+    errDupWords: "Words must all be unique within a puzzle.",
+    loaded: "Custom puzzle loaded!",
+    ratings: { perfect:"Perfect! 🌟", great:"Great! 👏", good:"Good 👍", tough:"Tough one 💪" },
+    diff: { yellow:"Yellow (easy)", green:"Green", blue:"Blue", purple:"Purple (hard)" },
+    customName:"Custom Puzzle"
+  },
+  zh: {
+    title: "词语连连看",
+    subtitle: "把 16 个词分成 4 组，每组 4 个！",
+    puzzle: "谜题", score: "分数", mistakes: "错误",
+    puzzleOf: (i,n)=>`第 ${i} / ${n} 关`,
+    deselect: "全部取消", shuffle: "打乱", hint: "提示 (−100)",
+    submit: "提交", next: "下一关", load: "载入 / 创建谜题",
+    oneAway: "差一个…", notEnough: "请正好选择 4 个词。",
+    alreadyGuessed: "这组已经猜过了。",
+    hintReveal: (name)=>`提示：其中一组是「${name}」`,
+    noHint: "没有可提示的分组了。",
+    solvedTitle: "谜题完成！", finalScore: "最终分数",
+    doneNext: "下一个内置谜题", doneLoad: "载入自定义谜题",
+    loadTitle: "载入 / 创建谜题", tabImport: "导入 JSON", tabCreate: "创建谜题",
+    importLabel: "上传 .json 文件（谜题数组或单个谜题对象）。",
+    importHint: "格式：每个谜题有 4 个分组，每组含名称、难度（yellow/green/blue/purple）和 4 个词。",
+    createReset: "重置", createSave: "保存并开始",
+    catName: "分组名称", word: "词语",
+    errParse: "无法将文件解析为 JSON。",
+    errShape: "谜题格式无效。需要 4 个分组 × 每组 4 个词。",
+    errFormFill: "请填写所有分组名称和全部 16 个词。",
+    errDupWords: "同一谜题内的词语不能重复。",
+    loaded: "自定义谜题已载入！",
+    ratings: { perfect:"完美！🌟", great:"很棒！👏", good:"不错 👍", tough:"有点难 💪" },
+    diff: { yellow:"黄（易）", green:"绿", blue:"蓝", purple:"紫（难）" },
+    customName:"自定义谜题"
+  }
+};
+
+/* ---------- Built-in puzzles: 10 English + 10 Chinese ---------- */
+const c = (name,difficulty,words)=>({name,difficulty,words});
+const BUILTIN = {
+  en: [
+    {id:1,categories:[
+      c("RED FRUITS","yellow",["APPLE","CHERRY","STRAWBERRY","RASPBERRY"]),
+      c("___ BALL","green",["BASE","FOOT","BASKET","VOLLEY"]),
+      c("PLANETS","blue",["MARS","VENUS","SATURN","NEPTUNE"]),
+      c("SILENT LETTERS: 'K'","purple",["KNIFE","KNEE","KNOCK","KNOW"])
+    ]},
+    {id:2,categories:[
+      c("SHADES OF BLUE","yellow",["NAVY","AZURE","COBALT","TEAL"]),
+      c("CARD GAMES","green",["POKER","BRIDGE","HEARTS","RUMMY"]),
+      c("KITCHEN TOOLS","blue",["WHISK","LADLE","GRATER","PEELER"]),
+      c("___ HOUSE","purple",["LIGHT","GREEN","WARE","FULL"])
+    ]},
+    {id:3,categories:[
+      c("BREEDS OF DOG","yellow",["BOXER","POODLE","BEAGLE","HUSKY"]),
+      c("CHESS PIECES","green",["KING","QUEEN","ROOK","BISHOP"]),
+      c("THINGS WITH KEYS","blue",["PIANO","MAP","LOCK","KEYBOARD"]),
+      c("BOXER ___","purple",["SHORTS","REBELLION","DOG","BRIEFS"])
+    ]},
+    {id:4,categories:[
+      c("OCEANS","yellow",["PACIFIC","ATLANTIC","INDIAN","ARCTIC"]),
+      c("MARTIAL ARTS","green",["JUDO","KARATE","BOXING","SUMO"]),
+      c("TYPES OF PASTA","blue",["PENNE","FUSILLI","RIGATONI","ZITI"]),
+      c("CALM SYNONYMS","purple",["SERENE","PLACID","TRANQUIL","STILL"])
+    ]},
+    {id:5,categories:[
+      c("WEATHER","yellow",["RAIN","SNOW","HAIL","WIND"]),
+      c("BOARD GAMES","green",["CLUE","RISK","SORRY","TROUBLE"]),
+      c("___ LIGHT","blue",["MOON","SPOT","FLASH","SUN"]),
+      c("SHADES OF GREEN","purple",["OLIVE","MINT","LIME","FOREST"])
+    ]},
+    {id:6,categories:[
+      c("CITRUS FRUITS","yellow",["LEMON","LIME","ORANGE","GRAPEFRUIT"]),
+      c("GREEK LETTERS","green",["ALPHA","BETA","DELTA","OMEGA"]),
+      c("KEYBOARD KEYS","blue",["SHIFT","ENTER","TAB","SPACE"]),
+      c("___ BOARD","purple",["KEY","SURF","CARD","SKATE"])
+    ]},
+    {id:7,categories:[
+      c("BIG CATS","yellow",["LION","TIGER","LEOPARD","CHEETAH"]),
+      c("US COINS","green",["PENNY","NICKEL","DIME","QUARTER"]),
+      c("MUSICAL NOTES","blue",["WHOLE","HALF","EIGHTH","SIXTEENTH"]),
+      c("CAR MODELS","purple",["JAGUAR","VIPER","MUSTANG","BEETLE"])
+    ]},
+    {id:8,categories:[
+      c("SPICES","yellow",["CUMIN","NUTMEG","PAPRIKA","GINGER"]),
+      c("DANCE STYLES","green",["SALSA","TANGO","WALTZ","SWING"]),
+      c("SWING ___","blue",["SET","STATE","SHIFT","VOTE"]),
+      c("SALSA MEANINGS","purple",["SAUCE","DANCE","MUSIC","DIP"])
+    ]},
+    {id:9,categories:[
+      c("SNAKES","yellow",["COBRA","VIPER","MAMBA","ADDER"]),
+      c("PROGRAMMING LANGS","green",["JAVA","RUBY","SWIFT","RUST"]),
+      c("FAST SYNONYMS","blue",["QUICK","RAPID","SPEEDY","HASTY"]),
+      c("GEMSTONES","purple",["PEARL","OPAL","JADE","AMBER"])
+    ]},
+    {id:10,categories:[
+      c("TREES","yellow",["OAK","MAPLE","BIRCH","ELM"]),
+      c("APPLE PRODUCTS","green",["MAC","WATCH","IPAD","IPHONE"]),
+      c("___ CONE","blue",["PINE","ICE","TRAFFIC","SNOW"]),
+      c("ASTONISH SYNONYMS","purple",["MARVEL","WONDER","AMAZE","STUN"])
+    ]}
+  ],
+  zh: [
+    {id:1,categories:[
+      c("水果","yellow",["苹果","香蕉","西瓜","葡萄"]),
+      c("颜色","green",["红色","蓝色","绿色","黄色"]),
+      c("动物","blue",["老虎","狮子","大象","熊猫"]),
+      c("含「花」的词","purple",["花园","花生","雪花","浪花"])
+    ]},
+    {id:2,categories:[
+      c("交通工具","yellow",["汽车","飞机","轮船","火车"]),
+      c("身体部位","green",["眼睛","鼻子","耳朵","嘴巴"]),
+      c("天气","blue",["晴天","下雨","刮风","打雷"]),
+      c("含「水」的词","purple",["水果","口水","洪水","泪水"])
+    ]},
+    {id:3,categories:[
+      c("四季","yellow",["春天","夏天","秋天","冬天"]),
+      c("方向","green",["东方","西方","南方","北方"]),
+      c("乐器","blue",["钢琴","小提琴","吉他","笛子"]),
+      c("含「风」的词","purple",["风筝","台风","作风","风景"])
+    ]},
+    {id:4,categories:[
+      c("职业","yellow",["医生","老师","警察","厨师"]),
+      c("蔬菜","green",["番茄","黄瓜","茄子","白菜"]),
+      c("运动","blue",["篮球","足球","游泳","跑步"]),
+      c("含「金」的词","purple",["金鱼","黄金","现金","金牌"])
+    ]},
+    {id:5,categories:[
+      c("家电","yellow",["冰箱","电视","洗衣机","空调"]),
+      c("文具","green",["铅笔","橡皮","尺子","书包"]),
+      c("鸟类","blue",["麻雀","老鹰","鸽子","燕子"]),
+      c("含「心」的词","purple",["开心","小心","中心","心情"])
+    ]},
+    {id:6,categories:[
+      c("城市","yellow",["北京","上海","广州","深圳"]),
+      c("饮料","green",["牛奶","咖啡","可乐","果汁"]),
+      c("家具","blue",["桌子","椅子","沙发","书柜"]),
+      c("含「电」的词","purple",["电话","闪电","电影","充电"])
+    ]},
+    {id:7,categories:[
+      c("花卉","yellow",["玫瑰","牡丹","菊花","荷花"]),
+      c("海洋生物","green",["海豚","鲨鱼","章鱼","海龟"]),
+      c("节日","blue",["春节","中秋","端午","元宵"]),
+      c("含「日」的词","purple",["日出","生日","日记","假日"])
+    ]},
+    {id:8,categories:[
+      c("五谷","yellow",["大米","小麦","玉米","高粱"]),
+      c("昆虫","green",["蜜蜂","蝴蝶","蚂蚁","蜻蜓"]),
+      c("星球","blue",["水星","金星","火星","木星"]),
+      c("含「山」的词","purple",["山峰","火山","山谷","登山"])
+    ]},
+    {id:9,categories:[
+      c("调味料","yellow",["食盐","白糖","酱油","味精"]),
+      c("金属","green",["黄金","白银","铜","铁"]),
+      c("形状","blue",["圆形","方形","三角","菱形"]),
+      c("含「手」的词","purple",["手机","歌手","握手","手表"])
+    ]},
+    {id:10,categories:[
+      c("树木","yellow",["柳树","松树","枫树","樟树"]),
+      c("宝石","green",["钻石","红宝石","翡翠","珍珠"]),
+      c("情绪","blue",["高兴","伤心","愤怒","害怕"]),
+      c("含「大」的词","purple",["大象","大海","伟大","大门"])
+    ]}
+  ]
+};
+
+/* ---------- State ---------- */
+const DIFF_ORDER = ["yellow","green","blue","purple"];
+const FULL_PENALTY = 50, ONE_AWAY_PENALTY = 25, HINT_COST = 100, START_SCORE = 1000;
+
+let lang = "en";
+let library = deepClone(BUILTIN[lang]);   // active puzzle library (built-in for lang + customs)
+let puzzleIndex = 0;
+let current = null;                        // active puzzle
+let tiles = [];                            // remaining word strings (shuffled)
+let selected = [];                         // selected word strings
+let solved = [];                           // array of solved category objects
+let score = START_SCORE;
+let mistakes = 0;
+let revealedHints = [];                    // difficulties already hinted
+
+/* ---------- Utilities ---------- */
+function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
+function t(){ return I18N[lang]; }
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+function sameSet(a,b){
+  if(a.length!==b.length) return false;
+  const s=new Set(a.map(x=>x.toString()));
+  return b.every(x=>s.has(x.toString()));
+}
+function validatePuzzle(p){
+  if(!p || !Array.isArray(p.categories) || p.categories.length!==4) return false;
+  const seen=new Set();
+  for(const cat of p.categories){
+    if(!cat || typeof cat.name!=="string" || !cat.name.trim()) return false;
+    if(!DIFF_ORDER.includes(cat.difficulty)) return false;
+    if(!Array.isArray(cat.words) || cat.words.length!==4) return false;
+    for(const w of cat.words){
+      if(typeof w!=="string" && typeof w!=="number") return false;
+      const key=String(w).trim();
+      if(!key) return false;
+      if(seen.has(key)) return false; // words unique across puzzle
+      seen.add(key);
+    }
+  }
+  return true;
+}
+
+/* ---------- Rendering ---------- */
+const $ = id => document.getElementById(id);
+
+function applyI18n(){
+  const s = t();
+  document.documentElement.lang = lang==="zh" ? "zh" : "en";
+  $("title").textContent = s.title;
+  $("subtitle").textContent = s.subtitle;
+  $("lblPuzzle").textContent = s.puzzle;
+  $("lblScore").textContent = s.score;
+  $("lblMistakes").textContent = s.mistakes;
+  $("btnDeselect").textContent = s.deselect;
+  $("btnShuffle").textContent = s.shuffle;
+  $("btnHint").textContent = s.hint;
+  $("btnSubmit").textContent = s.submit;
+  $("btnNext").textContent = s.next;
+  $("btnLoad").textContent = s.load;
+  $("loadTitle").textContent = s.loadTitle;
+  $("tabImportBtn").textContent = s.tabImport;
+  $("tabCreateBtn").textContent = s.tabCreate;
+  $("importLabel").textContent = s.importLabel;
+  $("importHint").textContent = s.importHint;
+  $("createReset").textContent = s.createReset;
+  $("createSave").textContent = s.createSave;
+  $("doneScoreCap").textContent = s.finalScore;
+  $("doneMistakesCap").textContent = s.mistakes;
+  $("doneNext").textContent = s.doneNext;
+  $("doneLoad").textContent = s.doneLoad;
+  $("doneTitle").textContent = s.solvedTitle;
+}
+
+function renderPicker(){
+  const sel = $("puzzleSelect");
+  sel.innerHTML = "";
+  library.forEach((p,i)=>{
+    const opt=document.createElement("option");
+    opt.value=i;
+    const label = p.custom ? (p.title || t().customName) : `${t().puzzle} ${p.id ?? (i+1)}`;
+    opt.textContent = `${label}`;
+    sel.appendChild(opt);
+  });
+  sel.value = puzzleIndex;
+}
+
+function renderStatus(){
+  $("valPuzzle").textContent = t().puzzleOf(puzzleIndex+1, library.length);
+  $("valScore").textContent = score;
+  $("valMistakes").textContent = mistakes;
+}
+
+function renderBanners(){
+  const box = $("banners");
+  box.innerHTML="";
+  // keep difficulty order for solved banners
+  const ordered = [...solved].sort((a,b)=>DIFF_ORDER.indexOf(a.difficulty)-DIFF_ORDER.indexOf(b.difficulty));
+  for(const cat of ordered){
+    const div=document.createElement("div");
+    div.className=`banner ${cat.difficulty}`;
+    div.innerHTML=`<div class="bname">${escapeHtml(cat.name)}</div><div class="bwords">${cat.words.map(escapeHtml).join(" · ")}</div>`;
+    box.appendChild(div);
+  }
+}
+
+function renderGrid(){
+  const grid=$("grid");
+  grid.innerHTML="";
+  for(const w of tiles){
+    const b=document.createElement("button");
+    b.className="tile"+(selected.includes(w)?" selected":"");
+    b.textContent=w;
+    b.addEventListener("click",()=>toggleSelect(w,b));
+    grid.appendChild(b);
+  }
+}
+
+function renderAll(){ renderStatus(); renderBanners(); renderGrid(); updateControls(); }
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+}
+
+/* ---------- Game flow ---------- */
+function loadPuzzle(idx){
+  puzzleIndex = idx;
+  current = library[idx];
+  solved = [];
+  selected = [];
+  revealedHints = [];
+  score = START_SCORE;
+  mistakes = 0;
+  tiles = shuffle(current.categories.flatMap(cat=>cat.words.map(String)));
+  renderPicker();
+  renderAll();
+}
+
+function toggleSelect(w,el){
+  const i=selected.indexOf(w);
+  if(i>=0){ selected.splice(i,1); el.classList.remove("selected"); }
+  else if(selected.length<4){ selected.push(w); el.classList.add("selected"); }
+  updateControls();
+}
+
+function updateControls(){
+  $("btnSubmit").disabled = selected.length!==4;
+  const allSolved = solved.length===current.categories.length;
+  $("btnHint").disabled = allSolved;
+  $("btnDeselect").disabled = selected.length===0;
+}
+
+function deselectAll(){
+  selected=[];
+  document.querySelectorAll(".tile.selected").forEach(el=>el.classList.remove("selected"));
+  updateControls();
+}
+
+function doShuffle(){
+  shuffle(tiles);
+  renderGrid();
+}
+
+function submitGuess(){
+  if(selected.length!==4){ toast(t().notEnough); return; }
+  // exact match?
+  const match = current.categories.find(cat=>sameSet(cat.words.map(String), selected) && !isSolved(cat));
+  if(match){
+    solved.push(match);
+    tiles = tiles.filter(w=>!match.words.map(String).includes(w));
+    selected=[];
+    renderAll();
+    if(solved.length===current.categories.length){ setTimeout(showCompletion,350); }
+    return;
+  }
+  // count best overlap for one-away detection
+  let best=0;
+  for(const cat of current.categories){
+    if(isSolved(cat)) continue;
+    const overlap = selected.filter(w=>cat.words.map(String).includes(w)).length;
+    if(overlap>best) best=overlap;
+  }
+  mistakes++;
+  if(best===3){
+    score = Math.max(0, score - ONE_AWAY_PENALTY);
+    toast(t().oneAway);
+  }else{
+    score = Math.max(0, score - FULL_PENALTY);
+  }
+  shakeSelected();
+  renderStatus();
+}
+
+function isSolved(cat){ return solved.some(s=>s.name===cat.name && s.difficulty===cat.difficulty); }
+
+function shakeSelected(){
+  document.querySelectorAll(".tile.selected").forEach(el=>{
+    el.classList.add("shake");
+    el.addEventListener("animationend",()=>el.classList.remove("shake"),{once:true});
+  });
+}
+
+function useHint(){
+  const remaining = current.categories.filter(cat=>!isSolved(cat) && !revealedHints.includes(cat.difficulty));
+  if(remaining.length===0){ toast(t().noHint); return; }
+  const pick = remaining[Math.floor(Math.random()*remaining.length)];
+  revealedHints.push(pick.difficulty);
+  score = Math.max(0, score - HINT_COST);
+  renderStatus();
+  toast(t().hintReveal(pick.name));
+}
+
+/* ---------- Completion ---------- */
+function ratingFor(){
+  const r=t().ratings;
+  if(mistakes===0) return r.perfect;
+  if(score>=800) return r.great;
+  if(score>=500) return r.good;
+  return r.tough;
+}
+function showCompletion(){
+  $("doneRating").textContent = ratingFor();
+  $("doneScore").textContent = score;
+  $("doneMistakes").textContent = mistakes;
+  $("doneOverlay").classList.add("show");
+}
+
+/* ---------- Toast ---------- */
+let toastTimer=null;
+function toast(msg){
+  const el=$("toast");
+  el.textContent=msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove("show"),1800);
+}
+
+/* ---------- Language & width toggles ---------- */
+function setLang(next){
+  if(next===lang) return;
+  lang=next;
+  // preserve any custom puzzles for this lang? Simplicity: rebuild library from built-ins for the new language.
+  library = deepClone(BUILTIN[lang]);
+  document.querySelectorAll("#langSeg button").forEach(b=>b.classList.toggle("active", b.dataset.lang===lang));
+  applyI18n();
+  buildCreatorForm();
+  loadPuzzle(0);
+}
+function setWidth(mode){
+  $("app").classList.toggle("pc", mode==="pc");
+  document.querySelectorAll("#widthSeg button").forEach(b=>b.classList.toggle("active", b.dataset.w===mode));
+}
+
+/* ---------- Load / Create modal ---------- */
+function openLoad(){ $("importErr").textContent=""; $("createErr").textContent=""; $("loadOverlay").classList.add("show"); }
+function closeLoad(){ $("loadOverlay").classList.remove("show"); }
+
+function switchTab(name){
+  document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("active", b.dataset.tab===name));
+  $("pane-import").classList.toggle("active", name==="import");
+  $("pane-create").classList.toggle("active", name==="create");
+}
+
+function playCustomPuzzle(p){
+  p.custom = true;
+  library.push(p);
+  loadPuzzle(library.length-1);
+  closeLoad();
+  toast(t().loaded);
+}
+
+function handleFile(ev){
+  const file = ev.target.files && ev.target.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    let data;
+    try{ data=JSON.parse(reader.result); }
+    catch(e){ $("importErr").textContent=t().errParse; return; }
+    const list = Array.isArray(data) ? data : [data];
+    if(list.length===0 || !list.every(validatePuzzle)){ $("importErr").textContent=t().errShape; return; }
+    // import all valid puzzles; play the first
+    list.forEach((p,i)=>{ p.custom=true; if(!p.title) p.title=`${t().customName} ${library.filter(x=>x.custom).length+1}`; library.push(deepClone(p)); });
+    loadPuzzle(library.length-list.length);
+    closeLoad();
+    toast(t().loaded);
+    ev.target.value="";
+  };
+  reader.readAsText(file);
+}
+
+function buildCreatorForm(){
+  const wrap=$("creatorRows");
+  wrap.innerHTML="";
+  DIFF_ORDER.forEach((diff,ri)=>{
+    const row=document.createElement("div");
+    row.className="creator-row";
+    const words = [0,1,2,3].map(wi=>`<input type="text" data-r="${ri}" data-w="${wi}" placeholder="${t().word} ${wi+1}" />`).join("");
+    row.innerHTML = `
+      <div class="rowhead">
+        <input type="text" data-r="${ri}" data-name="1" placeholder="${t().catName} (${t().diff[diff]})" />
+      </div>
+      <div class="words">${words}</div>`;
+    wrap.appendChild(row);
+  });
+}
+
+function readCreatorForm(){
+  const cats=[];
+  for(let ri=0;ri<4;ri++){
+    const name=document.querySelector(`#creatorRows input[data-r="${ri}"][data-name="1"]`).value.trim();
+    const words=[0,1,2,3].map(wi=>document.querySelector(`#creatorRows input[data-r="${ri}"][data-w="${wi}"]`).value.trim());
+    cats.push({name, difficulty:DIFF_ORDER[ri], words});
+  }
+  return cats;
+}
+
+function saveCreator(){
+  const cats=readCreatorForm();
+  // all filled?
+  const allFilled = cats.every(cat=>cat.name && cat.words.every(w=>w));
+  if(!allFilled){ $("createErr").textContent=t().errFormFill; return; }
+  const allWords = cats.flatMap(cat=>cat.words);
+  if(new Set(allWords).size!==allWords.length){ $("createErr").textContent=t().errDupWords; return; }
+  const puzzle={ id:Date.now(), custom:true, title:`${t().customName} ${library.filter(x=>x.custom).length+1}`, categories:cats };
+  if(!validatePuzzle(puzzle)){ $("createErr").textContent=t().errShape; return; }
+  $("createErr").textContent="";
+  playCustomPuzzle(puzzle);
+}
+
+function resetCreator(){
+  document.querySelectorAll("#creatorRows input").forEach(i=>i.value="");
+  $("createErr").textContent="";
+}
+
+/* ---------- Wire up ---------- */
+function init(){
+  applyI18n();
+  buildCreatorForm();
+  loadPuzzle(0);
+
+  $("btnDeselect").onclick=deselectAll;
+  $("btnShuffle").onclick=doShuffle;
+  $("btnHint").onclick=useHint;
+  $("btnSubmit").onclick=submitGuess;
+  $("btnNext").onclick=()=>loadPuzzle((puzzleIndex+1)%library.length);
+  $("puzzleSelect").onchange=e=>loadPuzzle(parseInt(e.target.value,10));
+  $("btnLoad").onclick=openLoad;
+
+  document.querySelectorAll("#langSeg button").forEach(b=>b.onclick=()=>setLang(b.dataset.lang));
+  document.querySelectorAll("#widthSeg button").forEach(b=>b.onclick=()=>setWidth(b.dataset.w));
+
+  $("loadClose").onclick=closeLoad;
+  $("loadOverlay").addEventListener("click",e=>{ if(e.target===$("loadOverlay")) closeLoad(); });
+  document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+  $("fileInput").addEventListener("change",handleFile);
+  $("createSave").onclick=saveCreator;
+  $("createReset").onclick=resetCreator;
+
+  $("doneNext").onclick=()=>{ $("doneOverlay").classList.remove("show"); loadPuzzle((puzzleIndex+1)%library.length); };
+  $("doneLoad").onclick=()=>{ $("doneOverlay").classList.remove("show"); openLoad(); };
+}
+
+document.addEventListener("DOMContentLoaded",init);
+</script>
+</body>
+</html>
