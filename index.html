@@ -228,6 +228,9 @@
   .result-grid .cell{ text-align:center; }
   .result-grid .cell .num{ font-size:1.8rem; font-weight:800; }
   .result-grid .cell .cap{ font-size:.75rem; color:var(--muted); text-transform:uppercase; }
+  .recap-label{ font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin:14px 0 6px; }
+  .result-groups{ display:flex; flex-direction:column; gap:6px; }
+  .result-groups .banner{ animation:none; padding:8px; text-align:left; }
 
   @keyframes shake{
     10%,90%{transform:translateX(-2px);}
@@ -323,7 +326,10 @@
     <div class="result-grid">
       <div class="cell"><div class="num" id="doneScore">1000</div><div class="cap" id="doneScoreCap">Final Score</div></div>
       <div class="cell"><div class="num" id="doneMistakes">0</div><div class="cap" id="doneMistakesCap">Mistakes</div></div>
+      <div class="cell"><div class="num" id="doneDifficulty">—</div><div class="cap" id="doneDifficultyCap">Difficulty</div></div>
     </div>
+    <div class="recap-label" id="doneGroupsCap">Groups</div>
+    <div class="result-groups" id="doneGroups"></div>
     <div class="actions">
       <button class="btn primary" id="doneNext">Next Built-in Puzzle</button>
       <button class="btn" id="doneLoad">Load Custom Puzzle</button>
@@ -363,6 +369,8 @@ const I18N = {
     loaded: "Custom puzzle loaded!",
     ratings: { perfect:"Perfect! 🌟", great:"Great! 👏", good:"Good 👍", tough:"Tough one 💪" },
     diff: { yellow:"Yellow (easy)", green:"Green", blue:"Blue", purple:"Purple (hard)" },
+    tiers: { easy:"Easy", medium:"Medium", hard:"Hard", expert:"Expert" },
+    difficulty:"Difficulty", groupsRecap:"Groups",
     customName:"Custom Puzzle"
   },
   zh: {
@@ -390,6 +398,8 @@ const I18N = {
     loaded: "自訂謎題已載入！",
     ratings: { perfect:"完美！🌟", great:"很棒！👏", good:"不錯 👍", tough:"有點難 💪" },
     diff: { yellow:"黃（易）", green:"綠", blue:"藍", purple:"紫（難）" },
+    tiers: { easy:"簡單", medium:"中等", hard:"困難", expert:"專家" },
+    difficulty:"難度", groupsRecap:"分組",
     customName:"自訂謎題"
   }
 };
@@ -440,10 +450,36 @@ function addCustoms(lg, puzzles){
   saveCustoms(lg, merged);
   return merged.length;                    // new total custom count for this language
 }
-// Rebuild the active library = built-ins for `lang` + saved custom puzzles.
+// ---------- Difficulty scoring ----------
+// Each dataset category name carries a “（n）” tag (n = 1 easy … 4 hard) that
+// rates that group's difficulty. A puzzle's difficulty is the sum of its four
+// tags (range 4..16). Puzzles without tags (e.g. custom) fall back to the
+// colour-band order (yellow=1 … purple=4).
+function catLevel(cat){
+  const m = String(cat.name).match(/[（(]\s*(\d+)\s*[）)]\s*$/);
+  if(m) return parseInt(m[1],10);
+  const ci = DIFF_ORDER.indexOf(cat.difficulty);
+  return ci>=0 ? ci+1 : 2;
+}
+function puzzleDifficulty(p){
+  return p.categories.reduce((s,c)=>s+catLevel(c),0);   // 4..16
+}
+function difficultyTier(score){
+  if(score<=7) return "easy";
+  if(score<=10) return "medium";
+  if(score<=13) return "hard";
+  return "expert";
+}
+
+// Rebuild the active library = built-ins for `lang` (sorted easiest→hardest)
+// + saved custom puzzles.
 function rebuildLibrary(){
+  const builtins = deepClone(BUILTIN[lang]);
+  builtins.forEach(p=>{ p._diff = puzzleDifficulty(p); });
+  builtins.sort((a,b)=> a._diff - b._diff || ((a.id??0) - (b.id??0)));
   const customs = loadCustoms(lang).map(p=>{ p.custom = true; return p; });
-  library = deepClone(BUILTIN[lang]).concat(deepClone(customs));
+  library = builtins.concat(deepClone(customs));
+  library.forEach(p=>{ if(p._diff==null) p._diff = puzzleDifficulty(p); });
 }
 
 /* ---------- Utilities ---------- */
@@ -502,6 +538,8 @@ function applyI18n(){
   $("createSave").textContent = s.createSave;
   $("doneScoreCap").textContent = s.finalScore;
   $("doneMistakesCap").textContent = s.mistakes;
+  $("doneDifficultyCap").textContent = s.difficulty;
+  $("doneGroupsCap").textContent = s.groupsRecap;
   $("doneNext").textContent = s.doneNext;
   $("doneLoad").textContent = s.doneLoad;
   $("doneTitle").textContent = s.solvedTitle;
@@ -513,7 +551,9 @@ function renderPicker(){
   library.forEach((p,i)=>{
     const opt=document.createElement("option");
     opt.value=i;
-    opt.textContent = p.custom ? (p.title || t().customName) : `${t().puzzle} ${p.id ?? (i+1)}`;
+    opt.textContent = p.custom
+      ? (p.title || t().customName)
+      : `${t().puzzle} ${i+1} · ${t().tiers[difficultyTier(p._diff)]}`;
     frag.appendChild(opt);
   });
   sel.innerHTML = "";
@@ -667,9 +707,23 @@ function ratingFor(){
   return r.tough;
 }
 function showCompletion(){
+  const s = t();
   $("doneRating").textContent = ratingFor();
   $("doneScore").textContent = score;
   $("doneMistakes").textContent = mistakes;
+  const diff = current._diff ?? puzzleDifficulty(current);
+  $("doneDifficulty").textContent = s.tiers[difficultyTier(diff)];
+  // Recap every group in the puzzle, colour-coded and in difficulty order.
+  const box = $("doneGroups");
+  box.innerHTML = "";
+  const ordered = [...current.categories]
+    .sort((a,b)=>DIFF_ORDER.indexOf(a.difficulty)-DIFF_ORDER.indexOf(b.difficulty));
+  for(const cat of ordered){
+    const div = document.createElement("div");
+    div.className = `banner ${cat.difficulty}`;
+    div.innerHTML = `<div class="bname">${escapeHtml(displayName(cat.name))}</div><div class="bwords">${cat.words.map(escapeHtml).join(" · ")}</div>`;
+    box.appendChild(div);
+  }
   $("doneOverlay").classList.add("show");
 }
 
