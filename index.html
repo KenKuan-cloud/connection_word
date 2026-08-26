@@ -290,7 +290,8 @@
   </div>
 
   <div class="picker">
-    <select id="puzzleSelect"></select>
+    <select id="diffSelect" aria-label="Difficulty"></select>
+    <select id="puzzleSelect" aria-label="Puzzle number"></select>
     <button class="btn" id="btnNext">Next Puzzle</button>
     <button class="btn" id="btnLoad">Load / Create Puzzle</button>
   </div>
@@ -505,6 +506,28 @@ function rebuildLibrary(){
   const customs = loadCustoms(lang).map(p=>{ p.custom = true; return p; });
   library = builtins.concat(deepClone(customs));
   library.forEach(p=>{ if(p._diff==null) p._diff = puzzleDifficulty(p); });
+  _groups = null;                            // invalidate tier grouping cache
+}
+
+// ---------- Tier grouping (for the two-step difficulty → number picker) ----------
+const TIER_ORDER = ["easy","medium","hard","expert","extreme"];
+let _groups = null;
+// Group library indices by difficulty tier, in canonical easy→hard order.
+function groups(){
+  if(_groups) return _groups;
+  const map = new Map();
+  library.forEach((p,i)=>{
+    const k = difficultyKey(p);
+    (map.get(k) || map.set(k, []).get(k)).push(i);
+  });
+  const order = TIER_ORDER.filter(k=>map.has(k));
+  for(const k of map.keys()) if(!order.includes(k)) order.push(k);
+  _groups = order.map(k=>({ key:k, indices:map.get(k) }));
+  return _groups;
+}
+function tierLabel(key){
+  const s = t();
+  return key==="extreme" ? (s.extremeLabel || key) : (s.tiers[key] || key);
 }
 
 /* ---------- Utilities ---------- */
@@ -571,35 +594,65 @@ function applyI18n(){
   $("doneTitle").textContent = s.solvedTitle;
 }
 
-function renderPicker(){
-  const sel = $("puzzleSelect");
+// Difficulty select: one option per tier present in the library, with its count.
+function renderDiffSelect(){
+  const sel = $("diffSelect");
   const frag = document.createDocumentFragment();
-  library.forEach((p,i)=>{
+  groups().forEach(g=>{
     const opt=document.createElement("option");
-    opt.value=i;
-    // The extreme library is uniformly hard, so its per-puzzle tier carries
-    // no information — label those by position only.
-    opt.textContent = p.custom
-      ? (p.title || t().customName)
-      : (lang==="zh_ext"
-          ? `${t().puzzle} ${i+1}`
-          : `${t().puzzle} ${i+1} · ${t().tiers[difficultyTier(p._diff)]}`);
+    opt.value=g.key;
+    opt.textContent = `${tierLabel(g.key)} (${g.indices.length})`;
     frag.appendChild(opt);
   });
-  sel.innerHTML = "";
-  sel.appendChild(frag);
-  sel.value = puzzleIndex;
+  sel.innerHTML=""; sel.appendChild(frag);
 }
-// Rebuild the (potentially 1000-long) option list only when the library changed;
-// otherwise just move the selection — keeps puzzle switching snappy.
-function syncPicker(){
+let _numTier = null;               // which tier the number <select> currently lists
+// Number select: the puzzles within one tier, numbered 1..N (custom keep titles).
+function renderNumberSelect(tierKey){
+  const g = groups().find(x=>x.key===tierKey) || groups()[0];
   const sel = $("puzzleSelect");
-  if(sel.options.length !== library.length) renderPicker();
-  else sel.value = puzzleIndex;
+  const frag = document.createDocumentFragment();
+  g.indices.forEach((gi,pos)=>{
+    const p = library[gi];
+    const opt=document.createElement("option");
+    opt.value=gi;
+    opt.textContent = p.custom ? (p.title || t().customName) : `${t().puzzle} ${pos+1}`;
+    frag.appendChild(opt);
+  });
+  sel.innerHTML=""; sel.appendChild(frag);
+  _numTier = g.key;
+}
+// Full rebuild — call when the library or language changed.
+function renderPicker(){
+  renderDiffSelect();
+  const tier = difficultyKey(current);
+  $("diffSelect").value = tier;
+  renderNumberSelect(tier);
+  $("puzzleSelect").value = puzzleIndex;
+}
+// Lightweight: keep both selects pointed at the current puzzle. Rebuilds the
+// number list only when the tier (or the library) changed — keeps it snappy.
+function syncPicker(){
+  const dsel=$("diffSelect"), psel=$("puzzleSelect");
+  const gs = groups();
+  if(dsel.options.length !== gs.length){ renderPicker(); return; }
+  const tier = difficultyKey(current);
+  if(dsel.value !== tier) dsel.value = tier;
+  const g = gs.find(x=>x.key===tier) || gs[0];
+  if(_numTier !== tier || psel.options.length !== g.indices.length) renderNumberSelect(tier);
+  psel.value = puzzleIndex;
+}
+// Position of the current puzzle within its tier (for the status bar).
+function tierPosition(){
+  const g = groups().find(x=>x.key===difficultyKey(current));
+  if(!g) return { pos:puzzleIndex, total:library.length };
+  const pos = g.indices.indexOf(puzzleIndex);
+  return { pos: pos<0?0:pos, total: g.indices.length };
 }
 
 function renderStatus(){
-  $("valPuzzle").textContent = t().puzzleOf(puzzleIndex+1, library.length);
+  const tp = tierPosition();
+  $("valPuzzle").textContent = t().puzzleOf(tp.pos+1, tp.total);
   const dv = $("valDifficulty");
   dv.textContent = difficultyLabel(current);
   dv.dataset.tier = difficultyKey(current);
@@ -897,6 +950,11 @@ function init(){
   $("btnHint").onclick=useHint;
   $("btnSubmit").onclick=submitGuess;
   $("btnNext").onclick=()=>loadPuzzle((puzzleIndex+1)%library.length);
+  // Pick a difficulty first → jump to that tier's first puzzle; then the number.
+  $("diffSelect").onchange=e=>{
+    const g = groups().find(x=>x.key===e.target.value) || groups()[0];
+    loadPuzzle(g.indices[0]);
+  };
   $("puzzleSelect").onchange=e=>loadPuzzle(parseInt(e.target.value,10));
   $("btnLoad").onclick=openLoad;
 
