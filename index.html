@@ -102,6 +102,12 @@
   .statusbar .stat{ text-align:center; flex:1; min-width:80px; }
   .statusbar .stat .label{ color:var(--muted); display:block; font-size:.7rem; text-transform:uppercase; letter-spacing:.5px;}
   .statusbar .stat .value{ font-weight:700; font-size:1.05rem; }
+  /* Difficulty tier colours (readable in both light & dark). */
+  .value[data-tier="easy"]{ color:#2e9e5b; }
+  .value[data-tier="medium"]{ color:#c9922b; }
+  .value[data-tier="hard"]{ color:#d1682e; }
+  .value[data-tier="expert"]{ color:#c0392b; }
+  .value[data-tier="advanced"]{ color:#8e44ad; }
 
   .banners{ display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
   .banner{
@@ -268,6 +274,7 @@
 
   <div class="statusbar">
     <div class="stat"><span class="label" id="lblPuzzle">Puzzle</span><span class="value" id="valPuzzle">#1 of 10</span></div>
+    <div class="stat"><span class="label" id="lblDifficulty">Difficulty</span><span class="value" id="valDifficulty">—</span></div>
     <div class="stat"><span class="label" id="lblScore">Score</span><span class="value" id="valScore">1000</span></div>
     <div class="stat"><span class="label" id="lblMistakes">Mistakes</span><span class="value" id="valMistakes">0</span></div>
   </div>
@@ -478,6 +485,16 @@ function difficultyTier(score){
   if(score<=13) return "hard";
   return "expert";
 }
+// Tier key + localized label for a puzzle. The advanced library is a fixed
+// tier of its own; every other puzzle is bucketed from its “（n）” score.
+function difficultyKey(p){
+  if(lang==="zh_adv") return "advanced";
+  return difficultyTier(p._diff ?? puzzleDifficulty(p));
+}
+function difficultyLabel(p){
+  const s=t(), k=difficultyKey(p);
+  return k==="advanced" ? s.advancedLabel : s.tiers[k];
+}
 
 // Rebuild the active library = built-ins for `lang` (sorted easiest→hardest)
 // + saved custom puzzles.
@@ -529,6 +546,7 @@ function applyI18n(){
   $("title").textContent = s.title;
   $("subtitle").textContent = s.subtitle;
   $("lblPuzzle").textContent = s.puzzle;
+  $("lblDifficulty").textContent = s.difficulty;
   $("lblScore").textContent = s.score;
   $("lblMistakes").textContent = s.mistakes;
   $("btnDeselect").textContent = s.deselect;
@@ -582,6 +600,9 @@ function syncPicker(){
 
 function renderStatus(){
   $("valPuzzle").textContent = t().puzzleOf(puzzleIndex+1, library.length);
+  const dv = $("valDifficulty");
+  dv.textContent = difficultyLabel(current);
+  dv.dataset.tier = difficultyKey(current);
   $("valScore").textContent = score;
   $("valMistakes").textContent = mistakes;
 }
@@ -719,12 +740,11 @@ function ratingFor(){
   return r.tough;
 }
 function showCompletion(){
-  const s = t();
   $("doneRating").textContent = ratingFor();
   $("doneScore").textContent = score;
   $("doneMistakes").textContent = mistakes;
-  const diff = current._diff ?? puzzleDifficulty(current);
-  $("doneDifficulty").textContent = s.advancedLabel || s.tiers[difficultyTier(diff)];
+  $("doneDifficulty").textContent = difficultyLabel(current);
+  $("doneDifficulty").dataset.tier = difficultyKey(current);
   // Recap every group in the puzzle, colour-coded and in difficulty order.
   const box = $("doneGroups");
   box.innerHTML = "";
